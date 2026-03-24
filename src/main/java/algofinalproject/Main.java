@@ -13,7 +13,7 @@ public class Main extends Application {
     private Image image;
     private PixelReader reader;
 
-    double threshold = 0.05;
+    double threshold = 0.01;
     int maxDepth = 6;
 
     public static void main(String[] args) {

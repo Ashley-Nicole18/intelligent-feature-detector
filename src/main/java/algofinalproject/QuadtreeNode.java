@@ -34,9 +34,30 @@ public class QuadtreeNode {
         return children == null;
     }
 
-    // accepts a pixel reader type, threshold, and max depth to decide whether a node can be subdivided or when to stop subdividing
-    public void subdivide(PixelReader reader, double threshold, int maxDepth) {
+// accepts a pixel reader type, threshold, and max depth to decide whether a node can be subdivided or when to stop subdividing
+public void subdivide(PixelReader reader, double threshold, int maxDepth) {
+
+    if (depth >= maxDepth) return;
+    if (width <= 1 || height <= 1) return;
+
+    variance = VarianceCalculator.compute(reader, x, y, width, height);
+
+    if (variance < threshold) return;
+
+    children = new QuadtreeNode[4];
+
+    int halfWidth = width / 2;
+    int halfHeight = height / 2;
+
+    children[0] = new QuadtreeNode(x, y, halfWidth, halfHeight, depth + 1);
+    children[1] = new QuadtreeNode(x + halfWidth, y, halfWidth, halfHeight, depth + 1);
+    children[2] = new QuadtreeNode(x, y + halfHeight, halfWidth, halfHeight, depth + 1);
+    children[3] = new QuadtreeNode(x + halfWidth, y + halfHeight, halfWidth, halfHeight, depth + 1);
+
+    for (QuadtreeNode child : children) {
+        child.subdivide(reader, threshold, maxDepth);
     }
+}
 
     // traverses a tree until it reaches a leaf node
     public void traverse(GraphicsContext gc) {
@@ -47,11 +68,8 @@ public class QuadtreeNode {
         // if this node has no children (leaf node), draw a filled rectangle for this region
         if (isLeaf()) {
             Color fill = (avgColor != null) ? avgColor : Color.MAGENTA;
-
             gc.setFill(fill);
-
             gc.fillRect(x, y, width, height);
-
             return;
         }
         // if this node has children, recursively traverse each child
