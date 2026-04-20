@@ -2,7 +2,7 @@ package algofinalproject;
 
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.PixelReader;
-import javafx.scene.paint.Color;
+import javafx.scene.image.PixelWriter;
 
 public class QuadtreeNode {
 
@@ -18,7 +18,6 @@ public class QuadtreeNode {
 
     // Analysis
     private double variance;
-    private Color avgColor;
 
     public QuadtreeNode(int x, int y, int width, int height, int depth) {
         this.x = x;
@@ -65,13 +64,6 @@ public void subdivide(PixelReader reader, double threshold, int maxDepth) {
         if (gc == null) {
             return;
         }
-        // if this node has no children (leaf node), draw a filled rectangle for this region
-        if (isLeaf()) {
-            Color fill = (avgColor != null) ? avgColor : Color.MAGENTA;
-            gc.setFill(fill);
-            gc.fillRect(x, y, width, height);
-            return;
-        }
         // if this node has children, recursively traverse each child
         if (children != null) {
             for (QuadtreeNode child : children) {
@@ -82,10 +74,65 @@ public void subdivide(PixelReader reader, double threshold, int maxDepth) {
         }
     }
 
+    public void applySobleToLeaves(
+        PixelReader reader,
+        PixelWriter writer
+    ) {
+        if (isLeaf()) {
+            SobelOperator.apply(reader, writer, this);
+            return;
+        }
+
+        for (QuadtreeNode child : children) {
+            child.applySobleToLeaves(reader, writer);
+        }
+    }
+
+    // Counts every node in the tree 
+    public int countAllNodes() {
+        if (isLeaf()) return 1;
+        int count = 1;
+        for (QuadtreeNode child : children) {
+            count += child.countAllNodes();
+        }
+        return count;
+    }
+
+    // Counts only leaf nodes
+    public int countLeafNodes() {
+        if (isLeaf()) return 1;
+        int count = 0;
+        for (QuadtreeNode child: children) {
+            count += child.countLeafNodes();
+        }
+        return count;
+    }
+
+    // Counts total pixels covered by leaf nodes
+    public int countScannedPixels() {
+        if (isLeaf()) return width * height;
+        int count = 0;
+        for (QuadtreeNode child : children) {
+            count += child.countScannedPixels();
+        }
+        return count;
+    }
+
+    public int getMaxDepthReached() {
+        if (isLeaf()) return depth;
+        int max = depth;
+        for (QuadtreeNode child : children) {
+            max = Math.max(max, child.getMaxDepthReached());
+        }
+        return max;
+    }
+
 
     // Getters
     public int getX() { return x; }
     public int getY() { return y; }
     public int getWidth() { return width; }
     public int getHeight() { return height; }
+    public double getVariance() { return variance; }
+    public QuadtreeNode[] getChildren() { return children; }
 }
