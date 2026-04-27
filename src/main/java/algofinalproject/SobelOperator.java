@@ -19,7 +19,11 @@ public class SobelOperator {
         {1, 2, 1}
     };
     //apply sobel inside a region
-    public void apply(PixelReader reader, PixelWriter writer, int x, int y, int width, int height) {
+    public static void apply(PixelReader reader, PixelWriter writer, QuadtreeNode node) {
+        int x = node.getX();
+        int y = node.getY();
+        int width = node.getWidth();
+        int height = node.getHeight();
         // precompute grayscale buffer - creates 2d arr to store grayscale values
         int[][] grayBuffer = new int[width][height];
         for (int i = 0; i < width; i++) {
