@@ -20,6 +20,7 @@ public class AppView {
     public Slider depthSlider;
     public Button openFileButton;
     public Button runButton;
+    public Button exportButton;
 
     // metric labels
     public Label metricTime;
@@ -28,6 +29,12 @@ public class AppView {
     public Label metricPixelsScanned;
     public Label metricReduction;
     public Label metricDepth;
+    public Label classifierLabel;
+    public Label classifierScore;
+
+    private Spinner<Integer> topNSpinner;
+    private Spinner<Integer> topPercentSpinner;
+    public boolean lastExportByPercent = false;  // track which mode was used
 
     public BorderPane root;
 
@@ -83,10 +90,10 @@ public class AppView {
     }
 
     private HBox buildControlsPanel() {
-        thresholdSlider = new Slider(0.001, 0.05, 0.009);
+        thresholdSlider = new Slider(0.0001, 0.04, 0.002);
         thresholdSlider.setPrefWidth(260);
         thresholdSlider.setShowTickLabels(true);
-        thresholdSlider.setMajorTickUnit(0.001);
+        thresholdSlider.setMajorTickUnit(0.005);
 
         depthSlider = new Slider(1, 10, 6);
         depthSlider.setPrefWidth(200);
@@ -98,9 +105,13 @@ public class AppView {
         runButton.setDefaultButton(true);
         styleButton(runButton, "#0f3460", "#533483");
 
+        exportButton = new Button("Export ROIs");
+        styleButton(exportButton, "#533483", "#6a3fa0");
+        exportButton.setDisable(true);
+
         Label threshLbl = styledLabel("Variance Threshold:");
         Label depthLbl = styledLabel("Max Depth:");
-        Label threshVal = styledLabel("0.009");
+        Label threshVal = styledLabel("0.002");
         Label depthVal = styledLabel("6");
 
         // Keep the value labels updates as sliders move
@@ -116,7 +127,8 @@ public class AppView {
             threshLbl, thresholdSlider, threshVal,
             new Separator(javafx.geometry.Orientation.VERTICAL),
             depthLbl, depthSlider, depthVal,
-            runButton
+            runButton,
+            exportButton
         );
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(10, 12, 10, 12));
@@ -132,7 +144,37 @@ public class AppView {
         metricReduction = bigMetricLabel("—");
         metricDepth = bigMetricLabel("—");
 
+        classifierLabel = new Label("—");
+        classifierLabel.setStyle(
+            "-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #888;"
+        );
+        classifierScore = new Label("score: —");
+        classifierScore.setStyle("-fx-text-fill: #6c7a96; -fx-font-size: 10px;");
+
+        VBox classifierCard = new VBox(4,
+            styledLabel("Image Complexity"),
+            classifierLabel,
+            classifierScore
+        );
+
+        classifierCard.setAlignment(javafx.geometry.Pos.CENTER);
+        classifierCard.setPadding(new javafx.geometry.Insets(10, 20, 10, 20));
+        classifierCard.setMinWidth(140);
+        classifierCard.setStyle(
+            "-fx-background-color: #16213e;" +
+            "-fx-background-radius: 8;" +
+            "-fx-border-color: #0f3460;" +
+            "-fx-border-radius: 8;" +
+            "-fx-border-width: 1.5;"
+        );
+
+        javafx.scene.control.Separator sep = 
+            new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL);
+        sep.setPadding(new javafx.geometry.Insets(0, 6, 0, 6));
+
         HBox row = new HBox(10,
+            classifierCard,
+            sep,
             metricCard("Exec. Time", metricTime, "ms"),
             metricCard("Total Nodes", metricTotalNodes, "nodes"),
             metricCard("Leaf Nodes", metricLeafNodes, "regions"),
@@ -140,7 +182,7 @@ public class AppView {
             metricCard("Reduction", metricReduction, "%"),
             metricCard("Max Depth Reached", metricDepth, "levels")
         );
-        row.setAlignment(Pos.CENTER);
+        row.setAlignment(javafx.geometry.Pos.CENTER);
         return row;
     }
 
@@ -173,8 +215,72 @@ public class AppView {
 
     private Label styledLabel(String text) {
         Label lbl = new Label(text);
-        lbl.setStyle("-fx-text-fill: #a0a8co; -fx-font-size: 12px;");
+        lbl.setStyle("-fx-text-fill: #a0a8c0; -fx-font-size: 12px;");
         return lbl;
+    }
+
+    // Dialog to select how many top regions to export
+    public int showExportSelectionDialog(int totalLeaves) {
+        javafx.scene.control.Dialog<Integer> dialog = new javafx.scene.control.Dialog<>();
+        dialog.setTitle("Export Top Regions");
+        dialog.setHeaderText("Select high-variance regions to export (Total leaves: " + totalLeaves + ")");
+
+        // Mode selection: Top N or Top X%
+        javafx.scene.control.RadioButton byCountRadio = new javafx.scene.control.RadioButton("Top N Regions");
+        javafx.scene.control.RadioButton byPercentRadio = new javafx.scene.control.RadioButton("Top X% of Regions");
+        ToggleGroup modeGroup = new ToggleGroup();
+        byCountRadio.setToggleGroup(modeGroup);
+        byPercentRadio.setToggleGroup(modeGroup);
+        byCountRadio.setSelected(true);
+
+        topNSpinner = new Spinner<>(1, totalLeaves, Math.min(50, totalLeaves));
+        topPercentSpinner = new Spinner<>(1, 100, 25);
+
+        // Show/hide spinners based on selection
+        topNSpinner.setDisable(false);
+        topPercentSpinner.setDisable(true);
+
+        byCountRadio.setOnAction(e -> {
+            topNSpinner.setDisable(false);
+            topPercentSpinner.setDisable(true);
+        });
+
+        byPercentRadio.setOnAction(e -> {
+            topNSpinner.setDisable(true);
+            topPercentSpinner.setDisable(false);
+        });
+
+        VBox content = new VBox(12);
+        content.setPadding(new Insets(10));
+        content.getChildren().addAll(
+            byCountRadio,
+            topNSpinner,
+            new Separator(),
+            byPercentRadio,
+            topPercentSpinner
+        );
+
+        javafx.scene.control.ButtonType okButton = javafx.scene.control.ButtonType.OK;
+        javafx.scene.control.ButtonType cancelButton = javafx.scene.control.ButtonType.CANCEL;
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == okButton) {
+                if (byCountRadio.isSelected()) {
+                    lastExportByPercent = false;
+                    return topNSpinner.getValue();
+                } else {
+                    lastExportByPercent = true;
+                    int percent = topPercentSpinner.getValue();
+                    return Math.max(1, (percent * totalLeaves) / 100);
+                }
+            }
+            return -1;
+        });
+
+        java.util.Optional<Integer> result = dialog.showAndWait();
+        return result.orElse(-1);
     }
 
     private void styleButton(Button btn, String bg, String hover) {

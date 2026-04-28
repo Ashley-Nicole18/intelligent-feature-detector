@@ -6,6 +6,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.*;
 import javafx.scene.paint.Color;
 import java.io.File;
+import java.util.List;
 
 
 public class AppController {
@@ -14,6 +15,9 @@ public class AppController {
 
     private Image currentImage;
     private PixelReader reader;
+    private List<QuadtreeNode> allLeavesSorted;
+    private AnalysisResult lastResult;
+    private String lastImageName = "image";
 
     public AppController(AppView view, Stage stage) {
         this.view = view;
@@ -28,6 +32,8 @@ public class AppController {
 
         // Run button: run the full algorithm
         view.runButton.setOnAction(e -> runAnalysis());
+
+        view.exportButton.setOnAction(e -> exportROIs());
     }
 
     private void  openFile() {
@@ -57,6 +63,7 @@ public class AppController {
 
         // Clear the result canvas
         view.resultCanvas.getGraphicsContext2D().clearRect(0, 0, w, h);
+        lastImageName = file.getName();
     }
 
     private void runAnalysis() {
@@ -79,6 +86,12 @@ public class AppController {
         QuadtreeNode root = new QuadtreeNode(0, 0, w, h, 0);
         root.subdivide(reader, threshold, maxDepth);
 
+        // Get all leaves sorted by variance (for export)
+        allLeavesSorted = root.getAllLeavesSortedByVariance();
+        System.out.println("Found " + allLeavesSorted.size() + " total leaves (highest variance: " 
+            + (allLeavesSorted.isEmpty() ? "N/A" : String.format("%.6f", allLeavesSorted.get(0).getVariance())) + ")");
+        view.exportButton.setDisable(false);
+
         WritableImage output = new WritableImage(w, h);
         PixelWriter writer = output.getPixelWriter();
         root.applySobleToLeaves(reader, writer);
@@ -95,6 +108,9 @@ public class AppController {
         result.pixelsScanned = root.countScannedPixels();
         result.totalPixels = w * h;
         result.maxDepthReached = root.getMaxDepthReached();
+        result.maxDepth = maxDepth;
+
+        lastResult = result;
 
         // Draw result on right canvas
         GraphicsContext gc = view.resultCanvas.getGraphicsContext2D();
@@ -134,5 +150,57 @@ public class AppController {
         view.metricPixelsScanned.setText(String.format("%,d", r.pixelsScanned));
         view.metricReduction.setText(String.format("%.1f", r.reductionPercent()));
         view.metricDepth.setText(String.valueOf(r.maxDepthReached));
+
+        String label = r.complexityLabel();
+        double score = r.complexityScore();
+        String color = r.complexityColor();
+
+        view.classifierLabel.setText(label);
+        view.classifierLabel.setStyle(
+            "-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + color + ";"
+        );
+        view.classifierScore.setText(String.format("score: %.2f", score));
+    }
+
+    private void exportROIs() {
+        if (allLeavesSorted == null || allLeavesSorted.isEmpty()) {
+            System.out.println("No regions to export. Run analysis first.");
+            return;
+        }
+
+        // Show dialog to select top-N or top-X%
+        int topN = view.showExportSelectionDialog(allLeavesSorted.size());
+        if (topN <= 0) {
+            System.out.println("Export cancelled.");
+            return;
+        }
+
+        // Export top-N regions
+        List<QuadtreeNode> selectedROIs = allLeavesSorted.subList(0, Math.min(topN, allLeavesSorted.size()));
+
+        FileChooser chooser = new FileChooser();
+        String modeLabel = view.lastExportByPercent ? "top" + (topN * 100 / allLeavesSorted.size()) + "pct" : "top" + topN;
+        chooser.setTitle("Export " + selectedROIs.size() + " High-Variance Regions (" + modeLabel + ")");
+        chooser.setInitialFileName("rois_" + modeLabel);
+
+        chooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("JSON File", "*.json"),
+            new FileChooser.ExtensionFilter("CSV File", "*.csv")
+        );
+
+        File file = chooser.showSaveDialog(stage);
+        if (file == null) return;
+
+        String name = file.getName().toLowerCase();
+        String label = (lastResult != null) ? lastResult.complexityLabel() : "UNKNOWN";
+        double score = (lastResult != null) ? lastResult.complexityScore() : 0.0;
+
+        if (name.endsWith(".json")) {
+            ROIExporter.toJSON(selectedROIs, lastImageName, label, score, file);
+            System.out.println("Exported " + selectedROIs.size() + " high-variance regions to " + file.getAbsolutePath());
+        } else if (name.endsWith(".csv")) {
+            ROIExporter.toCSV(selectedROIs, lastImageName, label, file);
+            System.out.println("Exported " + selectedROIs.size() + " high-variance regions to " + file.getAbsolutePath());
+        }
     }
 }
