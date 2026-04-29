@@ -4,7 +4,6 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.PixelWriter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 public class QuadtreeNode {
 

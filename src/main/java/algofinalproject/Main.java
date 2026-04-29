@@ -23,6 +23,7 @@ public class Main extends Application {
         primaryStage.setTitle("Intelligent Feature Detector");
         primaryStage.setScene(scene);
         primaryStage.show();
+        primaryStage.setFullScreen(true);
     }
 }
 

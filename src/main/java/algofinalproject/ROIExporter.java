@@ -4,6 +4,12 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.scene.image.Image;
+import javafx.scene.image.WritableImage;
+import javax.imageio.ImageIO;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.PixelWriter;
 
 public class ROIExporter {
     
@@ -76,6 +82,57 @@ public class ROIExporter {
         }
 
         writeToFile(outputFile, sb.toString());
+    }
+
+    // Crops each ROI from the original image and save it as an individual PNG
+    public static void toCroppedPNGs(
+        List<QuadtreeNode> rois,
+        Image source,
+        File outputFolder
+    ) {
+        if (!outputFolder.exists()) {
+            outputFolder.mkdirs();
+        }
+
+        PixelReader reader = source.getPixelReader();
+        int saved = 0;
+
+        for (int i = 0; i < rois.size(); i++) {
+            QuadtreeNode roi = rois.get(i);
+
+            int x = roi.getX();
+            int y = roi.getY();
+            int w = roi.getWidth();
+            int h = roi.getHeight();
+
+            // Skip regions too small to be useful 
+            if (w < 4 || h < 4) continue;
+
+            WritableImage crop = new WritableImage(w, h);
+            PixelWriter writer = crop.getPixelWriter();
+
+            // Copy each pixel from the source image into the crop
+            for (int px = 0; px < w; px++) {
+                for (int py = 0; py < h; py++) {
+                    writer.setColor(px, py, reader.getColor(x + px, y + py));
+                }
+            }
+
+            // Build a filename with namimg convention
+            String filename = String.format("roi_%04d_x%d_y%d_%dx%d.png",
+            i, x, y, w, h);
+
+            File outFile = new File(outputFolder, filename);
+
+            try {
+                ImageIO.write(SwingFXUtils.fromFXImage(crop, null), "png", outFile);
+                saved++;
+            } catch (IOException e) {
+                System.out.println("❌ Failed to save crop " + i + ": " + e.getMessage());
+            }
+        }
+        System.out.println("✅ Saved " + saved + " cropped regions to: "
+            + outputFolder.getAbsolutePath());
     }
 
     private static void writeToFile(File file, String content) {

@@ -21,6 +21,7 @@ public class AppView {
     public Button openFileButton;
     public Button runButton;
     public Button exportButton;
+    public Button exportCropsButton;
 
     // metric labels
     public Label metricTime;
@@ -34,7 +35,8 @@ public class AppView {
 
     private Spinner<Integer> topNSpinner;
     private Spinner<Integer> topPercentSpinner;
-    public boolean lastExportByPercent = false;  // track which mode was used
+    public boolean lastExportByPercent = false; 
+    private static final double MAX_CANVAS_SIZE = 800.0;
 
     public BorderPane root;
 
@@ -64,12 +66,15 @@ public class AppView {
         originalCanvas = new Canvas(400, 380);
         resultCanvas = new Canvas(400, 380);
 
-        VBox lefBox = labeledCanvas("Original Image", originalCanvas);
+        VBox leftBox = labeledCanvas("Original Image", originalCanvas);
         VBox rightBox = labeledCanvas("Quadtree + Sobel Result", resultCanvas);
 
-        HBox canvasRow = new HBox(20, lefBox, rightBox);
+        HBox canvasRow = new HBox(20, leftBox, rightBox);
         canvasRow.setAlignment(Pos.CENTER);
-        root.setCenter(canvasRow);
+        
+        StackPane centerHolder = new StackPane(canvasRow);
+        centerHolder.setAlignment(Pos.CENTER);
+        root.setCenter(centerHolder);
 
         // Bottom bar: controls + metricPixelsScanned
         VBox bottomArea = new VBox(14,
@@ -84,7 +89,18 @@ public class AppView {
     private VBox labeledCanvas(String title, Canvas canvas) {
         Label lbl = new Label(title);
         lbl.setStyle("-fx-text-fill: #a0a8c0; -fx-font-size: 12px;");
-        VBox box = new VBox(6, lbl, canvas);
+
+        StackPane canvasHolder = new StackPane(canvas);
+        canvasHolder.setAlignment(Pos.CENTER);
+        canvasHolder.setPrefSize(MAX_CANVAS_SIZE, MAX_CANVAS_SIZE);
+        canvasHolder.setStyle(
+            "-fx-background-color: #12122a;" +
+            "-fx-background-radius: 6;" +
+            "-fx-border-color: #0f3460;" +
+            "-fx-border-radius: 6;" +
+            "-fx-border-width: 1;"
+        );
+        VBox box = new VBox(8, lbl, canvasHolder);
         box.setAlignment(Pos.TOP_CENTER);
         return box;
     }
@@ -109,6 +125,10 @@ public class AppView {
         styleButton(exportButton, "#533483", "#6a3fa0");
         exportButton.setDisable(true);
 
+        exportCropsButton = new Button("🖼 Export Crops");
+        styleButton(exportCropsButton, "#1a6b3c", "#1D9E75");
+        exportCropsButton.setDisable(true);
+
         Label threshLbl = styledLabel("Variance Threshold:");
         Label depthLbl = styledLabel("Max Depth:");
         Label threshVal = styledLabel("0.002");
@@ -119,8 +139,8 @@ public class AppView {
             threshVal.setText(String.format("%.4f", newVal.doubleValue()))
         );
 
-        depthSlider.valueProperty().addListener((obs, old, newVal) -> 
-        depthVal.setText(String.valueOf(newVal.intValue()))
+        depthSlider.valueProperty().addListener((obs, old, newVal) ->
+            depthVal.setText(String.valueOf(newVal.intValue()))
         );
 
         HBox controls = new HBox(16,
@@ -128,7 +148,8 @@ public class AppView {
             new Separator(javafx.geometry.Orientation.VERTICAL),
             depthLbl, depthSlider, depthVal,
             runButton,
-            exportButton
+            exportButton,
+            exportCropsButton
         );
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.setPadding(new Insets(10, 12, 10, 12));
@@ -168,8 +189,7 @@ public class AppView {
             "-fx-border-width: 1.5;"
         );
 
-        javafx.scene.control.Separator sep = 
-            new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL);
+        Separator sep = new Separator(javafx.geometry.Orientation.VERTICAL);
         sep.setPadding(new javafx.geometry.Insets(0, 6, 0, 6));
 
         HBox row = new HBox(10,
