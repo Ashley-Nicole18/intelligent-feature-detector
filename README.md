@@ -127,7 +127,7 @@ Constructs the full `BorderPane` layout containing:
 
 `AppView` contains no logic — it only builds structure. The controller accesses its public fields (sliders, canvases, labels, buttons) to read values and update the display.
 
-Key design: `MAX_CANVAS_SIZE = 520.0` — all images scale to fit this boundary, both up and down, so the display is consistent regardless of source image dimensions.
+Key design: `MAX_CANVAS_SIZE = 600.0` — all images scale to fit this boundary, both up and down, so the display is consistent regardless of source image dimensions.
 
 ---
 
