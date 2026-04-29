@@ -34,4 +34,8 @@ public class VarianceCalculator {
         }
         return varianceSum / pixelCount;
     }
+    // global variance across the entire image
+    public static double computeGlobalVariance(PixelReader reader, int width, int height) {
+        return compute(reader, 0, 0, width, height);
+    }
 }
