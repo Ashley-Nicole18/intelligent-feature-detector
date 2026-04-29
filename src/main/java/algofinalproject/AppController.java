@@ -9,6 +9,8 @@ import javafx.scene.paint.Color;
 import java.io.File;
 import java.util.List;
 
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 
 public class AppController {
     private final AppView view;
@@ -21,6 +23,8 @@ public class AppController {
     private List<QuadtreeNode> allLeavesSorted;
     private AnalysisResult lastResult;
     private String lastImageName = "image";
+    // debounce for live preview
+    private final PauseTransition debounce = new PauseTransition(Duration.millis(200));
 
     public AppController(AppView view, Stage stage) {
         this.view = view;
@@ -39,6 +43,10 @@ public class AppController {
         view.exportButton.setOnAction(e -> exportROIs());
 
         view.exportCropsButton.setOnAction(e -> exportCrops());
+        
+        // sliders trigger preview instead of full analysis
+        view.thresholdSlider.valueProperty().addListener((obs, oldVal, newVal) -> triggerPreview());
+        view.depthSlider.valueProperty().addListener((obs, oldVal, newVal) -> triggerPreview());
     }
 
     private void  openFile() {
@@ -92,8 +100,14 @@ public class AppController {
             System.out.println("No image loaded yet. Open an image first");
             return;
         }
+        // adaptive threshold calculation
+        double globalVariance = VarianceCalculator.computeGlobalVariance(
+            reader,
+            (int) currentImage.getWidth(),
+            (int) currentImage.getHeight()
+        );
+        double adaptiveThreshold = globalVariance * view.thresholdSlider.getValue();
 
-        double threshold = view.thresholdSlider.getValue();
         int maxDepth = (int) view.depthSlider.getValue();
 
         int w = (int) currentImage.getWidth();
@@ -105,7 +119,7 @@ public class AppController {
 
         // Run algorithm
         QuadtreeNode root = new QuadtreeNode(0, 0, w, h, 0);
-        root.subdivide(reader, threshold, maxDepth);
+        root.subdivide(reader, adaptiveThreshold, maxDepth);
 
         // Get all leaves sorted by variance (for export)
         allLeavesSorted = root.getAllLeavesSortedByVariance();
@@ -145,33 +159,56 @@ public class AppController {
         gc.drawImage(output, offsetX, offsetY, displayW, displayH);
 
         // Draw the quadtree grid on top
-        drawQuadtreeOverlay(gc, root, displayScale, offsetX, offsetY);
+        drawQuadtreeOverlay(gc, root, adaptiveThreshold);
 
         // Update metric labels 
         updateMetrics(result);
     }
 
-    private void drawQuadtreeOverlay(GraphicsContext gc, QuadtreeNode node, double scale, double offsetX, double offsetY) {
+    private void runPreview() {
+        if (currentImage == null) return;
+
+        double globalVariance = VarianceCalculator.computeGlobalVariance(
+            reader,
+            (int) currentImage.getWidth(),
+            (int) currentImage.getHeight()
+        );
+        double adaptiveThreshold = globalVariance * view.thresholdSlider.getValue();
+        int maxDepth = (int) view.depthSlider.getValue();
+
+        int w = (int) currentImage.getWidth();
+        int h = (int) currentImage.getHeight();
+
+        QuadtreeNode root = new QuadtreeNode(0, 0, w, h, 0);
+        root.subdivide(reader, adaptiveThreshold, maxDepth);
+
+        GraphicsContext gc = view.resultCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, w, h); // NEW: clear old preview
+        drawQuadtreeOverlay(gc, root, adaptiveThreshold);
+    }
+
+    //  triggerPreview
+    private void triggerPreview() {
+        debounce.setOnFinished(e -> runPreview());
+        debounce.playFromStart();
+    }
+
+    private void drawQuadtreeOverlay(GraphicsContext gc, QuadtreeNode node, double adaptiveThreshold) {
         if (node.isLeaf()) {
             // High-variance leaf = interesting region → red tint
             // Low-variance leaf = uniform region → subtle green tint
-            if (node.getVariance() >= view.thresholdSlider.getValue()) {
-                gc.setStroke(Color.rgb(255, 80, 80, 0.7));
+            if (node.getVariance() >= adaptiveThreshold) {
+                gc.setStroke(Color.rgb(255, 80, 80, 0.7)); // red = high variance
             } else {
-                gc.setStroke(Color.rgb(80, 220, 120, 0.3));
+                gc.setStroke(Color.rgb(80, 220, 120, 0.3)); // green = uniform
             }
             gc.setLineWidth(0.5);
-            gc.strokeRect(
-                offsetX + node.getX() * scale,
-                offsetY + node.getY() * scale,
-                node.getWidth() * scale,
-                node.getHeight() * scale
-            );
+            gc.strokeRect(node.getX(), node.getY(), node.getWidth(), node.getHeight());
             return;
         }
         // Not a leaf — recurse into children
         for (QuadtreeNode child : node.getChildren()) {
-            if (child != null) drawQuadtreeOverlay(gc, child, scale, offsetX, offsetY);
+            if (child != null) drawQuadtreeOverlay(gc, child, adaptiveThreshold);
         }
     }
 
