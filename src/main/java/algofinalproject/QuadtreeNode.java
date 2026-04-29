@@ -3,7 +3,8 @@ package algofinalproject;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.PixelWriter;
-
+import java.util.ArrayList;
+import java.util.List;
 public class QuadtreeNode {
 
     // Spatial info
@@ -88,6 +89,26 @@ public void subdivide(PixelReader reader, double threshold, int maxDepth) {
         }
     }
 
+    // Returns all leaf nodes sorted by variance (descending)
+    public List<QuadtreeNode> getAllLeavesSortedByVariance() {
+        List<QuadtreeNode> result = new ArrayList<>();
+        collectAllLeaves(result);
+        result.sort((a, b) -> Double.compare(b.variance, a.variance));
+        return result;
+    }
+
+    private void collectAllLeaves(List<QuadtreeNode> result) {
+        if (isLeaf()) {
+            result.add(this);
+            return;
+        }
+        for (QuadtreeNode child : children) {
+            if (child != null) {
+                child.collectAllLeaves(result);
+            }
+        }
+    }
+
     // Counts every node in the tree 
     public int countAllNodes() {
         if (isLeaf()) return 1;
@@ -133,6 +154,7 @@ public void subdivide(PixelReader reader, double threshold, int maxDepth) {
     public int getY() { return y; }
     public int getWidth() { return width; }
     public int getHeight() { return height; }
+    public int getDepth() { return depth; }
     public double getVariance() { return variance; }
     public QuadtreeNode[] getChildren() { return children; }
 }

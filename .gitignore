@@ -1,0 +1,12 @@
+# Build outputs
+/target/
+
+# Metals / IDE-generated files
+/.metals/
+
+# Java class files
+*.class
+
+# OS files
+.DS_Store
+Thumbs.db
