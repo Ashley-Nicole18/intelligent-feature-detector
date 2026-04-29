@@ -36,7 +36,7 @@ public class AppView {
     private Spinner<Integer> topNSpinner;
     private Spinner<Integer> topPercentSpinner;
     public boolean lastExportByPercent = false; 
-    private static final double MAX_CANVAS_SIZE = 800.0;
+    private static final double MAX_CANVAS_SIZE = 600.0;
 
     public BorderPane root;
 

@@ -16,7 +16,7 @@ public class AppController {
     private final AppView view;
     private final Stage stage;
     private double displayScale = 1.0;
-    private static final double MAX_CANVAS_SIZE = 800.0;
+    private static final double MAX_CANVAS_SIZE = 600.0;
 
     private Image currentImage;
     private PixelReader reader;
@@ -159,7 +159,7 @@ public class AppController {
         gc.drawImage(output, offsetX, offsetY, displayW, displayH);
 
         // Draw the quadtree grid on top
-        drawQuadtreeOverlay(gc, root, adaptiveThreshold);
+        drawQuadtreeOverlay(gc, root, adaptiveThreshold, displayScale, offsetX, offsetY);
 
         // Update metric labels 
         updateMetrics(result);
@@ -169,22 +169,25 @@ public class AppController {
         if (currentImage == null) return;
 
         double globalVariance = VarianceCalculator.computeGlobalVariance(
-            reader,
-            (int) currentImage.getWidth(),
-            (int) currentImage.getHeight()
+            reader, (int) currentImage.getWidth(), (int) currentImage.getHeight()
         );
         double adaptiveThreshold = globalVariance * view.thresholdSlider.getValue();
         int maxDepth = (int) view.depthSlider.getValue();
-
         int w = (int) currentImage.getWidth();
         int h = (int) currentImage.getHeight();
 
         QuadtreeNode root = new QuadtreeNode(0, 0, w, h, 0);
         root.subdivide(reader, adaptiveThreshold, maxDepth);
 
+        // Compute offsets — same formula as openFile() and runAnalysis()
+        double displayW = w * displayScale;
+        double displayH = h * displayScale;
+        double offsetX = (MAX_CANVAS_SIZE - displayW) / 2.0;
+        double offsetY = (MAX_CANVAS_SIZE - displayH) / 2.0;
+
         GraphicsContext gc = view.resultCanvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, w, h); // NEW: clear old preview
-        drawQuadtreeOverlay(gc, root, adaptiveThreshold);
+        gc.clearRect(0, 0, MAX_CANVAS_SIZE, MAX_CANVAS_SIZE);
+        drawQuadtreeOverlay(gc, root, adaptiveThreshold, displayScale, offsetX, offsetY);
     }
 
     //  triggerPreview
@@ -193,22 +196,26 @@ public class AppController {
         debounce.playFromStart();
     }
 
-    private void drawQuadtreeOverlay(GraphicsContext gc, QuadtreeNode node, double adaptiveThreshold) {
+    private void drawQuadtreeOverlay(GraphicsContext gc, QuadtreeNode node,
+            double adaptiveThreshold, double scale, double offsetX, double offsetY) {
         if (node.isLeaf()) {
-            // High-variance leaf = interesting region → red tint
-            // Low-variance leaf = uniform region → subtle green tint
             if (node.getVariance() >= adaptiveThreshold) {
-                gc.setStroke(Color.rgb(255, 80, 80, 0.7)); // red = high variance
+                gc.setStroke(Color.rgb(255, 80, 80, 0.7));
             } else {
-                gc.setStroke(Color.rgb(80, 220, 120, 0.3)); // green = uniform
+                gc.setStroke(Color.rgb(80, 220, 120, 0.3));
             }
             gc.setLineWidth(0.5);
-            gc.strokeRect(node.getX(), node.getY(), node.getWidth(), node.getHeight());
+            // Multiply by scale, then add offset so it aligns with the centered image
+            gc.strokeRect(
+                offsetX + node.getX() * scale,
+                offsetY + node.getY() * scale,
+                node.getWidth() * scale,
+                node.getHeight() * scale
+            );
             return;
         }
-        // Not a leaf — recurse into children
         for (QuadtreeNode child : node.getChildren()) {
-            if (child != null) drawQuadtreeOverlay(gc, child, adaptiveThreshold);
+            if (child != null) drawQuadtreeOverlay(gc, child, adaptiveThreshold, scale, offsetX, offsetY);
         }
     }
 
